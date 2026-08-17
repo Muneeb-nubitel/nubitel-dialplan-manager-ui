@@ -12,6 +12,9 @@ import {
   Download,
   ExternalLink,
   Pencil,
+  Phone,
+  PhoneCall,
+  PhoneOff,
   Play,
   Plus,
   RefreshCw,
@@ -40,6 +43,7 @@ import {
 import {
   useAgents,
   useCdr,
+  useCdrSummary,
   useDeleteAgent,
   useDeleteQueue,
   useOverview,
@@ -1740,20 +1744,75 @@ export function TiersPage() {
   );
 }
 
+const ABANDONED_GROUP = "__ABANDONED_GROUP__";
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+function toLocalInputValue(date: Date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+function humanize(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 export function CallRecordsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
-  const [days, setDays] = useState(30);
+  const [dateFrom, setDateFrom] = useState(() =>
+    toLocalInputValue(new Date(Date.now() - 30 * 86400000)),
+  );
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const toIso = (value: string) => (value ? new Date(value).toISOString() : "");
+  const dateFromIso = toIso(dateFrom);
+  const dateToIso = toIso(dateTo);
   const { data, isLoading, isError, refetch } = useCdr({
     domain: domain(),
     search: query,
     status,
-    days,
+    dateFrom: dateFromIso,
+    dateTo: dateToIso,
     page,
   });
+  const { data: summary } = useCdrSummary({
+    domain: domain(),
+    search: query,
+    status: "",
+    dateFrom: dateFromIso,
+    dateTo: dateToIso,
+  });
   const records = data?.records || [];
+  const byStatus = summary?.byStatus || [];
+  const total = summary?.total || 0;
+  const withAgent = summary?.withAgent || 0;
+  const connectedCount = byStatus
+    .filter((s) => s.status.toLowerCase().includes("connect"))
+    .reduce((sum, s) => sum + s.count, 0);
+  const abandonedCount = byStatus
+    .filter((s) => s.status.toLowerCase().includes("abandon"))
+    .reduce((sum, s) => sum + s.count, 0);
+  const pct = (n: number) => (total ? `${Math.round((n / total) * 100)}% of total` : "—");
+  const applyPreset = (presetDays: number | null) => {
+    setPage(1);
+    if (presetDays === null) {
+      setDateFrom("");
+      setDateTo("");
+      return;
+    }
+    const from =
+      presetDays === 0
+        ? (() => {
+            const d = new Date();
+            d.setHours(0, 0, 0, 0);
+            return d;
+          })()
+        : new Date(Date.now() - presetDays * 86400000);
+    setDateFrom(toLocalInputValue(from));
+    setDateTo("");
+  };
   const exportCsv = () => {
     const quote = (value: unknown) =>
       `"${String(value ?? "").replaceAll('"', '""')}"`;
@@ -1842,26 +1901,120 @@ export function CallRecordsPage() {
             className="rounded-xl border border-input bg-card px-3 text-xs font-bold"
           >
             <option value="">All statuses</option>
-            <option value="CONNECTED">Connected</option>
-            <option value="ABANDONED">Abandoned</option>
-            <option value="FAILED">Failed</option>
-          </select>
-          <select
-            value={days}
-            onChange={(event) => {
-              setDays(Number(event.target.value));
-              setPage(1);
-            }}
-            className="rounded-xl border border-input bg-card px-3 text-xs font-bold"
-            data-testid="select-record-range"
-          >
-            <option value={1}>Today</option>
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={0}>All time</option>
+            <option value={ABANDONED_GROUP}>Abandoned (any reason)</option>
+            {byStatus.length > 0 ? (
+              byStatus.map((s) => (
+                <option key={s.status} value={s.status}>
+                  {humanize(s.status)} ({s.count})
+                </option>
+              ))
+            ) : (
+              <>
+                <option value="CONNECTED">Connected</option>
+                <option value="ABANDONED">Abandoned</option>
+                <option value="FAILED">Failed</option>
+              </>
+            )}
           </select>
         </div>
+        <div className="mt-3 flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex gap-1.5">
+            {[
+              { label: "Today", days: 0 },
+              { label: "7 days", days: 7 },
+              { label: "30 days", days: 30 },
+              { label: "All time", days: null },
+            ].map((preset) => (
+              <button
+                key={preset.label}
+                onClick={() => applyPreset(preset.days)}
+                className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-bold text-muted-foreground hover:border-primary hover:text-primary"
+                data-testid={`button-preset-${preset.label.replace(/\s+/g, "-").toLowerCase()}`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+            From
+            <input
+              type="datetime-local"
+              value={dateFrom}
+              onChange={(event) => {
+                setDateFrom(event.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-xs font-bold text-foreground"
+              data-testid="input-record-date-from"
+            />
+          </label>
+          <label className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+            To
+            <input
+              type="datetime-local"
+              value={dateTo}
+              onChange={(event) => {
+                setDateTo(event.target.value);
+                setPage(1);
+              }}
+              className="h-10 rounded-xl border border-input bg-card px-3 text-xs font-bold text-foreground"
+              data-testid="input-record-date-to"
+            />
+          </label>
+        </div>
       </Card>
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Total calls" value={fmt(total)} trend="in range" icon={Phone} />
+        <Metric
+          label="With agent"
+          value={fmt(withAgent)}
+          trend={pct(withAgent)}
+          icon={UsersRound}
+          accent="lime"
+        />
+        <Metric
+          label="Connected"
+          value={fmt(connectedCount)}
+          trend={pct(connectedCount)}
+          icon={PhoneCall}
+          accent="lime"
+        />
+        <Metric
+          label="Abandoned"
+          value={fmt(abandonedCount)}
+          trend={pct(abandonedCount)}
+          icon={PhoneOff}
+        />
+      </div>
+      {summary && summary.byReason.length > 0 && (
+        <Card className="mb-5 overflow-hidden">
+          <div className="border-b border-border p-5">
+            <div className="eyebrow text-muted-foreground">
+              Disposition detail
+            </div>
+            <h2 className="mt-1 text-base font-extrabold">
+              Reasons behind these outcomes
+            </h2>
+          </div>
+          <div className="divide-y divide-border">
+            {summary.byReason.map((r) => (
+              <div
+                key={r.reason}
+                className="flex items-center justify-between px-5 py-3 text-xs"
+                data-testid={`row-reason-${r.reason}`}
+              >
+                <span className="text-muted-foreground">{humanize(r.reason)}</span>
+                <span className="mono font-bold">
+                  {fmt(r.count)}{" "}
+                  <span className="font-sans text-[10px] text-muted-foreground">
+                    ({pct(r.count)})
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
       {isLoading ? (
         <Card className="space-y-3 p-5">
           <Skeleton className="h-14" />
@@ -2221,6 +2374,9 @@ export function SettingsPage() {
                 className="h-10 rounded-xl border border-input bg-card px-3 text-xs font-bold"
                 data-testid="select-refresh-interval"
               >
+                <option value="1">1 second</option>
+                <option value="2">2 seconds</option>
+                <option value="3">3 seconds</option>
                 <option value="15">15 seconds</option>
                 <option value="30">30 seconds</option>
                 <option value="60">60 seconds</option>

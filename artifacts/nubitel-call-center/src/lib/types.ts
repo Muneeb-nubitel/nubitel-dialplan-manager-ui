@@ -24,3 +24,8 @@ export type CdrRecord = {
   attempts: unknown[]; events: unknown[];
 };
 export type CdrListResponse = { records: CdrRecord[]; page: number; limit: number; total: number; totalPages: number };
+export type CdrSummary = {
+  total: number; withAgent: number;
+  byStatus: { status: string; count: number }[];
+  byReason: { reason: string; count: number }[];
+};
