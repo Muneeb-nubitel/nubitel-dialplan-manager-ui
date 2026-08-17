@@ -5,7 +5,7 @@ export type Agent = {
 };
 export type Queue = {
   extension: string; name: string; uuid: string; campaignId?: string; domain_name: string; strategy: string;
-  record: boolean; waiting: number; receiving: number; answered: number; inQueue: number;
+  record: boolean; waiting: number; trying: number; receiving: number; answered: number; inQueue: number;
   tierCount: number; status: string;
 };
 export type TierAgent = { uuid: string; position: number; status: string; call_status: string; last_active: string };

@@ -190,7 +190,8 @@ export function OverviewPage() {
   const agents = data?.agents || [];
   const queues = data?.queues || [];
   const callsInFlight = queues.reduce(
-    (total, queue) => total + queue.waiting + queue.receiving + queue.inQueue,
+    (total, queue) =>
+      total + queue.waiting + queue.trying + queue.receiving + queue.inQueue,
     0,
   );
   const statusData = [

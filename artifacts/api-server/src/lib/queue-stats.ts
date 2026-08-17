@@ -2,6 +2,7 @@ import https from "node:https";
 
 export type QueueMemberStat = {
   campaign_id?: string;
+  queue?: string;
   queue_extension?: string;
   state?: string;
 };
