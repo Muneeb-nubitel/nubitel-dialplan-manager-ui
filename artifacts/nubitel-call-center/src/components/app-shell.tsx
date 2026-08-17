@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { Activity, BarChart3, Bot, ChevronRight, CircleHelp, Database, Gauge, Layers3, Menu, Radio, Settings2, SlidersHorizontal, UsersRound, X, Zap } from 'lucide-react';
+import { availableDomains, getSelectedDomain } from '@/lib/domains';
 
 const nav = [
   { href: '/', label: 'Overview', icon: Gauge },
@@ -18,7 +19,7 @@ const admin = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [location] = useLocation();
-  const [domain, setDomain] = useState(() => localStorage.getItem('nubitel-domain') || 'northstar.nubitel');
+  const [domain, setDomain] = useState(getSelectedDomain);
   useEffect(() => { localStorage.setItem('nubitel-domain', domain); }, [domain]);
   return (
     <div className="min-h-[100dvh] app-shell text-foreground">
@@ -36,9 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="px-4 pt-6">
           <div className="eyebrow px-3 pb-2 text-sidebar-foreground/45">Workspace</div>
           <select value={domain} onChange={(e) => setDomain(e.target.value)} className="w-full rounded-xl border border-sidebar-border bg-sidebar-accent px-3 py-2.5 text-xs font-semibold text-sidebar-accent-foreground" data-testid="select-domain">
-            <option value="northstar.nubitel">Northstar / production</option>
-            <option value="harbor.nubitel">Harbor / staging</option>
-            <option value="atlas.nubitel">Atlas / sandbox</option>
+            {availableDomains.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
           </select>
         </div>
         <nav className="flex-1 space-y-1 px-4 pt-7">
