@@ -37,16 +37,14 @@ export PATH="/opt/homebrew/bin:$PATH"
 
 export REDIS_HOST="temporar-redis-cxdev.nubitel.io"
 export REDIS_PORT="11012"
-read -s "REDIS_PWD?Redis password: "
-export REDIS_PWD
+export REDIS_PWD="06LXiAr6GVqLHZ6hDbjTtHprYNqyRLUS"
 echo
 
 export DB_HOST="dev-test.cwofoftqiuof.ap-southeast-1.rds.amazonaws.com"
 export DB_PORT="5432"
 export DB_USER="cxnubitel"
 export DB_NAME="cxnubiteldev"
-read -s "DB_PASSWORD?PostgreSQL password: "
-export DB_PASSWORD
+export DB_PASSWORD="y4Q8Uyj0G2m0ElCUl"
 echo
 
 PORT=5050 corepack pnpm@10.32.0 --filter @workspace/api-server run dev
