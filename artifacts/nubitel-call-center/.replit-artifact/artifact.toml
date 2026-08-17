@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Nubitel Call Center"
+description = "A production-style multi-tenant call center management dashboard for monitoring agents, campaigns, tiers, call records, and administrative sync operations against the Nubitel REST API."
+version = "1.0.0"
+id = "artifacts/nubitel-call-center"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24382
+
+[services.development]
+run = "pnpm --filter @workspace/nubitel-call-center run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/nubitel-call-center", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/nubitel-call-center/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24382"
+BASE_PATH = "/"

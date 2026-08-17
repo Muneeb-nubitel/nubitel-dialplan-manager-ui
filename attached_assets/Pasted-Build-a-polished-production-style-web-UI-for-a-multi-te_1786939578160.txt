@@ -1,0 +1,387 @@
+Build a polished, production-style web UI for a multi-tenant Call Center Management application called “Nubitel Call Center”.
+
+IMPORTANT:
+- Create only the frontend application.
+- Do not replace or rewrite the existing Go backend.
+- The frontend must run locally and connect to an existing REST API.
+- Use the existing Swagger specification as the API contract when available:
+  - /docs/swagger.yaml
+  - Runtime Swagger UI: http://localhost:8080/swagger/index.html
+- Active API base path:
+  http://localhost:8080/call-center/api/v1
+- Make the backend URL configurable using:
+  VITE_API_BASE_URL=http://localhost:8080
+- Do not hardcode sample data into UI components.
+- Include an optional mock-data mode for frontend development when the Go API is unavailable:
+  VITE_USE_MOCK_API=true
+
+TECH STACK:
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- React Router
+- TanStack Query for server state and API calls
+- React Hook Form with Zod validation
+- Recharts for dashboard charts
+- Lucide icons
+- Axios or a clean fetch-based API client
+- Vitest and React Testing Library for core tests
+
+The application must work with:
+npm install
+npm run dev
+
+GENERAL UI DIRECTION:
+Create a clean, modern call-center operations dashboard. It should look professional and information-dense without feeling crowded.
+
+Visual style:
+- Dark navy sidebar
+- Light neutral main background
+- White cards with subtle borders and shadows
+- Blue as the primary action color
+- Green for Available/Ready/Idle
+- Amber for Ringing/Offering/Waiting
+- Red for Busy/errors/destructive actions
+- Gray for Logged Out/Not Ready
+- Responsive desktop-first layout
+- Accessible color contrast
+- Keyboard-accessible forms and dialogs
+- Light and dark themes
+- Loading skeletons, empty states, errors, confirmation dialogs, and toast notifications
+
+APPLICATION LAYOUT:
+Use a persistent left sidebar containing:
+- Overview
+- Live Operations
+- Campaigns / Queues
+- Agents
+- Tier Management
+- Call Records
+- System Sync
+- Settings
+
+The top bar should contain:
+- Page title
+- Selected domain/tenant
+- Global search
+- Backend connection indicator
+- Last refreshed time
+- Refresh button
+- Theme toggle
+- User/profile menu placeholder
+
+Because the currently active backend may not expose a domain-list endpoint, create a domain selector that:
+- Reads available domain names from local frontend configuration
+- Allows a domain to be entered manually
+- Saves the selected domain in localStorage
+- Sends it as domain_name when required by the API
+
+PAGES AND FEATURES:
+
+1. OVERVIEW DASHBOARD
+
+Show KPI cards:
+- Total agents
+- Available agents
+- Busy agents
+- Logged-out agents
+- Active campaigns
+- Waiting callers
+- Calls being tried
+- Calls being received
+- Answered calls
+- Agents currently in a queue call
+
+Add:
+- Agent status distribution donut chart
+- Live campaign activity chart
+- Campaign performance table
+- Recent operational events panel
+- Auto-refresh selector: Off, 5 sec, 15 sec, 30 sec, 60 sec
+- Clear indication of stale data or API connection failure
+
+Use:
+GET /call-center/api/v1/agents?domain_name={domain}
+GET /call-center/api/v1/queues/queue-members-stats?domain_name={domain}&campaign_ids={ids}
+
+Queue member statistics include:
+- Waiting
+- Trying
+- Receiving
+- Answered
+- In a queue call
+
+2. LIVE OPERATIONS
+
+Create a real-time operations board with:
+- Campaign cards
+- Waiting/trying/receiving/answered counts
+- Agents grouped by Available, Ringing, Busy, Idle, and Logged Out
+- Search and status filters
+- Manual refresh and auto-refresh
+- A detail drawer for an agent
+- A detail drawer for a campaign
+
+Clearly distinguish these independent states:
+- Global agent status: Available, Ready, Busy, Logged Out
+- Campaign/tier status: Ready, Available, Not Ready, Offering, Busy
+- Call status: Idle, Ringing, Busy
+
+Do not merge these into one ambiguous status.
+
+3. CAMPAIGNS / QUEUES
+
+Create a searchable table with:
+- Queue/campaign name
+- Extension
+- Domain
+- Strategy
+- Assigned agent count
+- Live waiting calls
+- Status
+- Action menu
+
+Include:
+- Create queue dialog
+- View/edit queue page
+- Delete confirmation requiring the queue extension
+- Validation errors shown beside fields
+- Duplicate creation errors shown as conflict messages
+- Queue details grouped into understandable sections
+
+API operations:
+POST /call-center/api/v1/queues
+GET /call-center/api/v1/queues
+PATCH /call-center/api/v1/queues
+DELETE /call-center/api/v1/queues/
+
+Use domain_name and extension query parameters according to Swagger.
+
+4. AGENTS
+
+Create an agent directory with:
+- Table and card view toggle
+- Search by name, extension, UUID, or contact
+- Filter by global status
+- Filter by campaign membership
+- Status badges
+- Current call-status indicator
+- Assigned campaigns count
+- Last-active display
+- Row action menu
+
+Add:
+- Create agent form
+- Edit agent form
+- Agent details drawer/page
+- Delete confirmation
+- Change global agent status
+- Campaign membership and campaign-specific status section
+
+API operations:
+POST /call-center/api/v1/agent
+GET /call-center/api/v1/agent
+GET /call-center/api/v1/agents
+PATCH /call-center/api/v1/agent
+DELETE /call-center/api/v1/agent
+
+For single-agent operations use:
+- uuid
+- domain_name
+
+When an agent is set to “Logged Out”, warn the operator that active reservations may be released and campaign call states may be reset to Idle.
+
+5. TIER MANAGEMENT
+
+Build a visual campaign-to-agent assignment interface.
+
+Features:
+- Select campaign/queue
+- View tiers grouped by level
+- Show agent position within each tier
+- Add agents to a tier
+- Remove agents from a tier
+- Reorder agents with drag-and-drop or explicit position controls
+- Edit campaign-specific agent status
+- Show global agent status separately
+- Show tier status and call status separately
+- Display skipped campaigns returned by bulk status updates
+
+API operations:
+POST /call-center/api/v1/tiers
+GET /call-center/api/v1/tiers
+GET /call-center/api/v1/tiers/all
+PATCH /call-center/api/v1/tiers/add
+POST /call-center/api/v1/tiers/update-agent-tier
+PATCH /call-center/api/v1/tiers/remove
+PATCH /call-center/api/v1/tiers/set-agent-positions
+GET /call-center/api/v1/tiers/agent-campaign-status
+GET /call-center/api/v1/tiers/campaign-agents-status
+GET /call-center/api/v1/tiers/agent-status-in-campaign
+POST /call-center/api/v1/tiers/agent-status
+DELETE /call-center/api/v1/tiers
+
+6. CALL RECORDS
+
+Create a call-record reporting page prepared for completed queue-session records.
+
+Include:
+- Date range picker
+- Campaign filter
+- Agent filter
+- Disposition filter
+- Search by caller/callee/session identifier
+- Paginated table
+- Call-duration formatting
+- Expandable record details
+- Export currently displayed records to CSV
+- Empty state explaining when no reporting endpoint is available
+
+The existing backend currently exposes:
+POST /api/v1/cdr/add/call-record
+
+Do not invent a production GET endpoint. Put read/report functionality behind an API service interface and use mock mode until a reporting GET endpoint is supplied.
+
+7. SYSTEM SYNC
+
+Create a protected administrative page with two operations:
+- Sync PostgreSQL data to Redis
+- Sync Redis data to PostgreSQL
+
+Endpoints:
+POST /api/v1/sync/db-to-redis
+POST /api/v1/sync/redis-to-db
+
+Each operation must:
+- Explain its direction clearly
+- Require confirmation
+- Disable the button while running
+- Display the full success or error result
+- Record the last operation time in the current browser session
+- Warn that this is an administrative operation
+
+8. SETTINGS
+
+Include:
+- API base URL display
+- Configured domain list
+- Default selected domain
+- Auto-refresh interval
+- Mock API toggle
+- Theme setting
+- Backend health/connection test
+- Link to Swagger UI
+- Clear local preferences button
+
+API CLIENT REQUIREMENTS:
+- Create a central typed API client.
+- Organize endpoints into modules:
+  - agentsApi
+  - queuesApi
+  - tiersApi
+  - statsApi
+  - cdrApi
+  - syncApi
+- Properly encode all query parameters.
+- Normalize backend errors into:
+  {
+    status: number,
+    message: string,
+    fieldErrors?: Record<string, string>
+  }
+- Handle:
+  - 400 as invalid request
+  - 404 as domain/queue/agent/tier not found
+  - 409 as duplicate or reservation conflict
+  - 413 as request too large
+  - 500 as server error
+  - network failures as backend unavailable
+- Do not silently hide errors.
+- Add request cancellation where appropriate.
+- Use TanStack Query cache invalidation after mutations.
+- Poll only on live/dashboard pages and stop polling when the page is hidden.
+
+LOCAL DEVELOPMENT:
+- Configure the Vite dev server so API calls can be proxied to the local Go backend.
+- Provide an example .env file:
+  VITE_API_BASE_URL=http://localhost:8080
+  VITE_USE_MOCK_API=false
+  VITE_DEFAULT_DOMAIN=example.com
+  VITE_DOMAINS=example.com,tenant2.example.com
+- Do not commit real credentials.
+- Add an npm script for type checking.
+- Add a clear README containing:
+  - Prerequisites
+  - Installation
+  - Environment configuration
+  - How to run the Go backend separately
+  - How to run the frontend
+  - How to use mock mode
+  - How to build the production frontend
+  - Common CORS and connection troubleshooting
+
+ARCHITECTURE:
+Use a maintainable structure similar to:
+
+src/
+  api/
+  components/
+  features/
+    agents/
+    queues/
+    tiers/
+    dashboard/
+    live-operations/
+    call-records/
+    sync/
+  hooks/
+  layouts/
+  lib/
+  mocks/
+  pages/
+  routes/
+  schemas/
+  types/
+
+AUTHENTICATION:
+The current backend routes do not show a complete authentication contract. Create an authentication-ready layout and route guard abstraction, but do not invent a login API. In development, use a clearly labeled local demo session. Keep authentication logic isolated so a real provider can be added later.
+
+MOCK MODE:
+Implement realistic mock data matching the actual domain:
+- Multiple campaigns
+- At least 15 agents
+- Multiple tier levels
+- Agents in Available, Ready, Busy, and Logged Out states
+- Tier states including Ready, Available, Not Ready, Offering, and Busy
+- Call states including Idle, Ringing, and Busy
+- Queue member statistics
+- Loading delays
+- Configurable error examples
+
+QUALITY REQUIREMENTS:
+- No unfinished placeholder pages for the requested features
+- No lorem ipsum
+- No oversized marketing hero section
+- Avoid excessive gradients
+- Use reusable table, status badge, dialog, form, and empty-state components
+- All forms must have validation
+- Destructive actions must require confirmation
+- Responsive down to tablet and mobile
+- Add tests for:
+  - Status badge mapping
+  - API error normalization
+  - Agent form validation
+  - Queue form validation
+  - At least one mutation flow
+- Run lint, type checking, tests, and production build before considering the task complete
+
+Start by:
+1. Examining the existing repository and Swagger specification.
+2. Summarizing the API models and required query parameters.
+3. Creating the frontend architecture.
+4. Implementing the application page by page.
+5. Verifying it works locally.
+
+If an API field is unclear, inspect docs/swagger.yaml and the Go request/response models instead of inventing a field.

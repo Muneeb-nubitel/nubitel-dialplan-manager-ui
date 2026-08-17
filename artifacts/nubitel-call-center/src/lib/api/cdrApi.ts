@@ -1,0 +1,2 @@
+import { isMockEnabled, request, wait } from '../api-client';
+export const cdrApi = { add: async (record: unknown) => { if (isMockEnabled()) { await wait(400); return record; } return request('/api/v1/cdr/add/call-record', { method: 'POST', body: JSON.stringify(record) }); } };

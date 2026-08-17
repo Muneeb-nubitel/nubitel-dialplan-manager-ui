@@ -1,0 +1,2 @@
+import { isMockEnabled, request, wait } from '../api-client';
+export const syncApi = { run: async (direction: 'db-to-redis' | 'redis-to-db') => { if (isMockEnabled()) { await wait(1400); return { direction, result: 'completed' }; } return request(`/api/v1/sync/${direction}`, { method: 'POST' }); } };
