@@ -14,6 +14,7 @@ node_modules
 # environment
 .env
 .env.*
+!.env.example
 
 # IDEs and editors
 /.idea
