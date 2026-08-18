@@ -158,6 +158,49 @@ function Metric({
     </Card>
   );
 }
+function CallsInFlightMetric({ queues }: { queues: Queue[] }) {
+  const states = [
+    {
+      label: "Waiting",
+      value: queues.reduce((total, queue) => total + queue.waiting, 0),
+    },
+    {
+      label: "Trying",
+      value: queues.reduce((total, queue) => total + queue.trying, 0),
+    },
+    {
+      label: "Receiving",
+      value: queues.reduce((total, queue) => total + queue.receiving, 0),
+    },
+    {
+      label: "Answered",
+      value: queues.reduce((total, queue) => total + queue.answered, 0),
+    },
+  ];
+
+  return (
+    <Card className="fade-up p-5" testId="metric-calls-in-flight">
+      <div className="flex items-start justify-between">
+        <span className="eyebrow text-muted-foreground">Calls in flight</span>
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent/30 text-[hsl(155,50%,28%)]">
+          <Zap size={16} />
+        </span>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 sm:grid-cols-4">
+        {states.map((state) => (
+          <div key={state.label}>
+            <strong className="mono block text-xl font-medium tracking-[-.06em]">
+              {state.value}
+            </strong>
+            <span className="text-[10px] font-bold text-muted-foreground">
+              {state.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
 function Topbar({
   onRefresh,
   stale = false,
@@ -189,11 +232,6 @@ export function OverviewPage() {
   const { data, isLoading, isError, refetch } = useOverview(domain());
   const agents = data?.agents || [];
   const queues = data?.queues || [];
-  const callsInFlight = queues.reduce(
-    (total, queue) =>
-      total + queue.waiting + queue.trying + queue.receiving + queue.inQueue,
-    0,
-  );
   const statusData = [
     {
       name: "Available",
@@ -267,13 +305,7 @@ export function OverviewPage() {
             trend="+2.4%"
             icon={UsersRound}
           />
-          <Metric
-            label="Calls in flight"
-            value={String(callsInFlight)}
-            trend="Live"
-            icon={Zap}
-            accent="lime"
-          />
+          <CallsInFlightMetric queues={queues} />
         </div>
       )}
       <div className="mt-5 grid gap-5 xl:grid-cols-[1.45fr_.8fr]">

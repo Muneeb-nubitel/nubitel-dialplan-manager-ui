@@ -70,6 +70,7 @@ router.get("/campaigns", async (req, res) => {
           [campaign.campaignId, campaign] as const,
         ]),
       );
+      const answeredByCampaign = new Map<(typeof campaigns)[number], number>();
       for (const record of stats) {
         const campaign = byCampaign.get(
           String(record.queue ?? record.queue_extension ?? record.campaign_id ?? ""),
@@ -79,8 +80,19 @@ router.get("/campaigns", async (req, res) => {
         if (state === "waiting") campaign.waiting += 1;
         if (state === "trying") campaign.trying += 1;
         if (state === "receiving") campaign.receiving += 1;
-        if (state === "in a queue call") campaign.inQueue += 1;
-        if (state === "answered") campaign.answered += 1;
+        if (state === "in a queue call" || state === "answered") {
+          answeredByCampaign.set(
+            campaign,
+            (answeredByCampaign.get(campaign) ?? 0) + 1,
+          );
+        }
+      }
+      for (const campaign of campaigns) {
+        const answered = answeredByCampaign.get(campaign) ?? 0;
+        campaign.answered = answered;
+        // The upstream service uses both labels for the same queue-call state.
+        // Keep both response fields aligned until consumers migrate to one name.
+        campaign.inQueue = answered;
       }
     } catch (error) {
       req.log.warn({ err: error }, "Campaigns loaded without live queue statistics");
