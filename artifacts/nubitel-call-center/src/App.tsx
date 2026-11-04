@@ -5,6 +5,7 @@ import { AppShell } from '@/components/app-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
+import { CdrDetailPage, CdrRecordsPage } from '@/pages/cdr-viewer';
 import { AgentDetailPage, AgentsPage, CallRecordsPage, CampaignDetailPage, CampaignsPage, LiveOperationsPage, OverviewPage, SettingsPage, SystemSyncPage, TiersPage } from '@/pages/call-center';
 import {
   Route,
@@ -30,6 +31,8 @@ function Router() {
           <Route path="/agents/:uuid" component={AgentDetailPage} />
           <Route path="/tiers" component={TiersPage} />
           <Route path="/call-records" component={CallRecordsPage} />
+          <Route path="/cdr" component={CdrRecordsPage} />
+          <Route path="/cdr/:uuid" component={CdrDetailPage} />
           <Route path="/system-sync" component={SystemSyncPage} />
           <Route path="/settings" component={SettingsPage} />
           <Route component={NotFound} />
