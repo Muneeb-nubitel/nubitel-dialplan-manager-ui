@@ -40,6 +40,7 @@ router.get("/campaigns", async (req, res) => {
         strategy: String(queue["strategy"] ?? "unknown"),
         record: Boolean(queue["record"]),
         waiting: numberValue(queue["waiting"]),
+        trying: numberValue(queue["trying"]),
         receiving: numberValue(queue["receiving"]),
         answered: numberValue(queue["answered"]),
         inQueue: numberValue(queue["inQueue"] ?? queue["in_queue"]),
@@ -49,22 +50,49 @@ router.get("/campaigns", async (req, res) => {
     });
 
     try {
-      const stats = await getQueueMemberStats(domain, campaigns.map((campaign) => campaign.campaignId));
+      // Dialplan identifies a live queue by its Redis key identifier,
+      // `extension@domain`, not by the campaign UUID stored on the queue.
+      const stats = await getQueueMemberStats(
+        domain,
+        campaigns.map((campaign) => `${campaign.extension}@${domain}`),
+      );
       for (const campaign of campaigns) {
         campaign.waiting = 0;
+        campaign.trying = 0;
         campaign.receiving = 0;
         campaign.answered = 0;
         campaign.inQueue = 0;
       }
-      const byCampaign = new Map(campaigns.flatMap((campaign) => [[campaign.campaignId, campaign], [campaign.extension, campaign]]));
+      const byCampaign = new Map(
+        campaigns.flatMap((campaign) => [
+          [`${campaign.extension}@${domain}`, campaign] as const,
+          [campaign.extension, campaign] as const,
+          [campaign.campaignId, campaign] as const,
+        ]),
+      );
+      const answeredByCampaign = new Map<(typeof campaigns)[number], number>();
       for (const record of stats) {
-        const campaign = byCampaign.get(String(record.campaign_id ?? record.queue_extension ?? ""));
+        const campaign = byCampaign.get(
+          String(record.queue ?? record.queue_extension ?? record.campaign_id ?? ""),
+        );
         if (!campaign) continue;
         const state = String(record.state ?? "").trim().toLowerCase();
         if (state === "waiting") campaign.waiting += 1;
+        if (state === "trying") campaign.trying += 1;
         if (state === "receiving") campaign.receiving += 1;
-        if (state === "in a queue call") campaign.inQueue += 1;
-        if (state === "answered") campaign.answered += 1;
+        if (state === "in a queue call" || state === "answered") {
+          answeredByCampaign.set(
+            campaign,
+            (answeredByCampaign.get(campaign) ?? 0) + 1,
+          );
+        }
+      }
+      for (const campaign of campaigns) {
+        const answered = answeredByCampaign.get(campaign) ?? 0;
+        campaign.answered = answered;
+        // The upstream service uses both labels for the same queue-call state.
+        // Keep both response fields aligned until consumers migrate to one name.
+        campaign.inQueue = answered;
       }
     } catch (error) {
       req.log.warn({ err: error }, "Campaigns loaded without live queue statistics");
