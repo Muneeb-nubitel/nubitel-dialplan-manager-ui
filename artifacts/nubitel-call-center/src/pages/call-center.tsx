@@ -43,6 +43,7 @@ import {
 } from "recharts";
 import {
   useAgents,
+  useAddTierMember,
   useCdr,
   useCdrSummary,
   useDomains,
@@ -51,12 +52,13 @@ import {
   useOverview,
   useQueues,
   useQueueActivity,
+  useOperationsSummary,
   useSelectionScores,
   useSaveAgent,
   useSaveQueue,
   useSync,
   useTiers,
-  useUpdateTier,
+  useRemoveTierMember,
 } from "@/hooks/use-call-center";
 import { mockAgents } from "@/lib/mock-data";
 import type { Agent, Queue } from "@/lib/types";
@@ -231,10 +233,16 @@ function Topbar({
 export function OverviewPage() {
   const { data, isLoading, isError, refetch } = useOverview(domain());
   const [activityRange, setActivityRange] = useState<1 | 24>(1);
+  const [queueSortMetric, setQueueSortMetric] = useState<"waiting" | "trying" | "receiving" | "inQueue">("inQueue");
+  const [queueSortDirection, setQueueSortDirection] = useState<"high" | "low">("high");
   const { data: activity } = useQueueActivity(domain(), activityRange);
   const agents = data?.agents || [];
   const queues = data?.queues || [];
   const activityPoints = activity?.points || [];
+  const sortedQueues = [...queues].sort((left, right) => {
+    const difference = left[queueSortMetric] - right[queueSortMetric];
+    return difference === 0 ? left.name.localeCompare(right.name) : queueSortDirection === "high" ? -difference : difference;
+  });
   const statusData = [
     {
       name: "Available",
@@ -420,23 +428,29 @@ export function OverviewPage() {
         <Card className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-border p-5">
             <div>
-              <div className="eyebrow text-muted-foreground">
-                Campaign performance
-              </div>
+              <div className="eyebrow text-muted-foreground">Campaign live performance</div>
               <h2 className="mt-1 text-base font-extrabold">
-                Queues needing a look
+                Live queue activity
               </h2>
             </div>
-            <Link
-              href="/campaigns"
-              className="text-xs font-extrabold text-primary hover:underline"
-              data-testid="link-view-campaigns"
-            >
-              View directory <ChevronRight size={14} className="inline" />
-            </Link>
+            <div className="flex items-center gap-2">
+              <select value={queueSortMetric} onChange={(event) => setQueueSortMetric(event.target.value as typeof queueSortMetric)} className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px] font-bold" data-testid="select-queue-sort-metric">
+                <option value="inQueue">Active</option>
+                <option value="receiving">Receiving</option>
+                <option value="trying">Trying</option>
+                <option value="waiting">Waiting</option>
+              </select>
+              <select value={queueSortDirection} onChange={(event) => setQueueSortDirection(event.target.value as typeof queueSortDirection)} className="rounded-lg border border-border bg-card px-2 py-1.5 text-[11px] font-bold" data-testid="select-queue-sort-direction">
+                <option value="high">High to low</option>
+                <option value="low">Low to high</option>
+              </select>
+              <Link href="/campaigns" className="hidden text-xs font-extrabold text-primary hover:underline sm:block" data-testid="link-view-campaigns">
+                View directory <ChevronRight size={14} className="inline" />
+              </Link>
+            </div>
           </div>
           <div className="divide-y divide-border">
-            {queues.map((q) => (
+            {sortedQueues.map((q) => (
               <Link
                 href={`/campaigns/${q.extension}`}
                 key={q.extension}
@@ -450,15 +464,11 @@ export function OverviewPage() {
                   <div className="truncate text-sm font-extrabold">
                     {q.name}
                   </div>
-                  <div className="mt-1 flex gap-3 text-[11px] text-muted-foreground">
-                    <span>{q.receiving} receiving</span>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
                     <span>{q.waiting} waiting</span>
-                  </div>
-                </div>
-                <div className="hidden text-right sm:block">
-                  <div className="mono text-sm font-medium">{q.answered}</div>
-                  <div className="text-[10px] text-muted-foreground">
-                    answered
+                    <span>{q.trying} trying</span>
+                    <span>{q.receiving} receiving</span>
+                    <span>{q.inQueue} active</span>
                   </div>
                 </div>
                 <StatusPill status={q.status} />
@@ -502,6 +512,7 @@ export function OverviewPage() {
 }
 export function LiveOperationsPage() {
   const { data, isLoading, refetch } = useOverview(domain());
+  const { data: summary, refetch: refetchSummary } = useOperationsSummary(domain());
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState<Agent | null>(null);
@@ -517,7 +528,7 @@ export function LiveOperationsPage() {
       detail="A low-noise view of the people and queues carrying the load."
       action={
         <button
-          onClick={() => refetch()}
+          onClick={() => { refetch(); refetchSummary(); }}
           className="rounded-xl bg-primary px-4 py-2.5 text-xs font-extrabold text-primary-foreground shadow-sm hover:-translate-y-0.5"
           data-testid="button-refresh-live"
         >
@@ -529,26 +540,24 @@ export function LiveOperationsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="grid-paper p-4">
           <div className="eyebrow text-muted-foreground">Calls in flight</div>
-          <div className="mono mt-2 text-2xl">14</div>
+          <div className="mono mt-2 text-2xl">{summary?.callsInFlight ?? "—"}</div>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            Across 4 campaigns
+            {summary ? `Across ${summary.campaignCount} active campaign${summary.campaignCount === 1 ? "" : "s"}` : "Loading live queues"}
           </div>
         </Card>
         <Card className="p-4">
-          <div className="eyebrow text-muted-foreground">Longest wait</div>
-          <div className="mono mt-2 text-2xl text-primary">01:42</div>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            Renewals — West
-          </div>
+          <div className="eyebrow text-muted-foreground">Live queue states</div>
+          <div className="mono mt-2 text-2xl text-primary">{summary?.states.waiting ?? "—"}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">waiting · {summary?.states.trying ?? "—"} trying · {summary?.states.receiving ?? "—"} receiving · {summary?.states.active ?? "—"} active</div>
         </Card>
         <Card className="p-4">
           <div className="eyebrow text-muted-foreground">Floor state</div>
           <div className="mt-2 flex items-center gap-2 text-lg font-extrabold">
-            <span className="live-dot h-2 w-2 rounded-full bg-accent" />
-            Stable
+            <span className={`h-2 w-2 rounded-full ${summary?.floor.state === "critical" ? "bg-destructive" : summary?.floor.state === "attention" ? "bg-[hsl(37,86%,62%)]" : "live-dot bg-accent"}`} />
+            {summary?.floor.state ? summary.floor.state[0].toUpperCase() + summary.floor.state.slice(1) : "Loading"}
           </div>
           <div className="mt-1 text-[11px] text-muted-foreground">
-            No active incidents
+            {summary?.floor.message ?? "Checking live queues"}
           </div>
         </Card>
       </div>
@@ -1546,6 +1555,8 @@ export function TiersPage() {
   const [queue, setQueue] = useState("");
   const { data: tiers } = useTiers(domain(), queue);
   const { data: selectionScores } = useSelectionScores(domain(), queue);
+  const addMember = useAddTierMember(domain(), queue);
+  const removeMember = useRemoveTierMember(domain(), queue);
   const selectionByAgent = new Map(
     (selectionScores || []).map((entry) => [entry.agentUuid, entry]),
   );
@@ -1562,18 +1573,28 @@ export function TiersPage() {
       .filter((entry) => isEligible(entry.agentUuid))
       .map((entry, index) => [entry.agentUuid, index + 1]),
   );
-  const update = useUpdateTier(domain());
-  const [selected, setSelected] = useState<string[]>([]);
+  const [targetTier, setTargetTier] = useState(0);
+  const [availableAgentQuery, setAvailableAgentQuery] = useState("");
   const [notice, setNotice] = useState("");
   useEffect(() => {
     if (!queue && queues?.[0]?.extension) setQueue(queues[0].extension);
   }, [queue, queues]);
-  const toggle = (uuid: string) =>
-    setSelected((current) =>
-      current.includes(uuid)
-        ? current.filter((x) => x !== uuid)
-        : [...current, uuid],
-    );
+  useEffect(() => {
+    if (tiers?.length && !tiers.some((tier) => tier.level === targetTier)) setTargetTier(tiers[0].level);
+  }, [targetTier, tiers]);
+  const assignedAgentUuids = new Set((tiers || []).flatMap((tier) => tier.agents));
+  const availableAgents = (agents || []).filter((agent) =>
+    !assignedAgentUuids.has(agent.uuid) && `${agent.name} ${agent.agent_id}`.toLowerCase().includes(availableAgentQuery.toLowerCase()),
+  );
+  const addAgent = (uuid: string) => {
+    const tier = tiers?.find((item) => item.level === targetTier);
+    const positions = Object.values(tier?.agentDetails || {}).map((item) => item.position);
+    const position = positions.length ? Math.max(...positions) + 1 : 0;
+    addMember.mutate({ domain: domain(), extension: queue, level: targetTier, agents: { [uuid]: position } }, { onSuccess: () => setNotice("Agent added to tier") });
+  };
+  const removeAgent = (uuid: string, level: number, position: number) => {
+    removeMember.mutate({ domain: domain(), extension: queue, level, agents: { [uuid]: position } }, { onSuccess: () => setNotice("Agent removed from tier") });
+  };
   return (
     <PageFrame
       eyebrow="Routing control"
@@ -1581,8 +1602,7 @@ export function TiersPage() {
       detail="Decide who receives the next call, without losing the shape of the queue."
       action={
         <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-xs font-bold">
-          <span className="h-2 w-2 rounded-full bg-accent" /> Changes are staged
-          locally
+          <span className="h-2 w-2 rounded-full bg-accent" /> Membership changes save immediately
         </div>
       }
     >
@@ -1653,16 +1673,9 @@ export function TiersPage() {
                     const candidateNumber = eligibleCandidateNumber.get(uuid);
                     return agent ? (
                       <div
-                        className={`flex items-center gap-3 rounded-xl border p-3 ${selected.includes(uuid) ? "border-primary/40 bg-primary/5" : "border-border bg-card"}`}
+                        className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
                         key={uuid}
                       >
-                        <input
-                          type="checkbox"
-                          checked={selected.includes(uuid)}
-                          onChange={() => toggle(uuid)}
-                          className="h-4 w-4 accent-primary"
-                          data-testid={`checkbox-tier-agent-${uuid}`}
-                        />
                         <div className="grid h-7 w-7 place-items-center rounded-full bg-secondary text-[9px] font-extrabold">
                           {agent.name
                             .split(" ")
@@ -1705,6 +1718,14 @@ export function TiersPage() {
                           <ChevronDown size={14} className="rotate-180" />
                         </button>
                         <button
+                          onClick={() => removeAgent(uuid, tier.level, tierAgent?.position ?? index)}
+                          disabled={removeMember.isPending}
+                          className="rounded px-2 py-1 text-[10px] font-extrabold text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                          data-testid={`button-remove-tier-agent-${uuid}`}
+                        >
+                          Remove
+                        </button>
+                        <button
                           className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-primary"
                           data-testid={`button-tier-down-${uuid}`}
                           aria-label="Move agent down"
@@ -1719,7 +1740,7 @@ export function TiersPage() {
             ))}
           </div>
         </Card>
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
           <Card className="p-5">
             <div className="eyebrow text-muted-foreground">Queue candidates</div>
             <h2 className="mt-1 text-base font-extrabold">Candidate order</h2>
@@ -1755,16 +1776,22 @@ export function TiersPage() {
               })}
             </div>
           </Card>
-          <Card className="p-5">
+          <Card className="order-first p-5">
             <div className="eyebrow text-muted-foreground">Add members</div>
             <h2 className="mt-1 text-base font-extrabold">Available agents</h2>
-            <div className="mt-4 space-y-2">
-              {(agents || [])
-                .filter((a) => !selected.includes(a.uuid))
-                .slice(0, 5)
-                .map((a) => (
+            <label className="mt-4 block text-[11px] font-bold">Add to tier
+              <select value={targetTier} onChange={(event) => setTargetTier(Number(event.target.value))} className="mt-2 h-9 w-full rounded-lg border border-input bg-card px-2 text-xs font-bold" data-testid="select-add-tier-level">
+                {(tiers || []).map((tier) => <option key={tier.level} value={tier.level}>{tier.name}</option>)}
+              </select>
+            </label>
+            <div className="mt-4">
+              <SearchBox value={availableAgentQuery} onChange={setAvailableAgentQuery} placeholder="Search available agents" testId="input-available-tier-agents" />
+            </div>
+            <div className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              {availableAgents.map((a) => (
                   <button
-                    onClick={() => toggle(a.uuid)}
+                    onClick={() => addAgent(a.uuid)}
+                    disabled={addMember.isPending || !queue}
                     className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left hover:border-primary"
                     key={a.uuid}
                     data-testid={`button-add-tier-agent-${a.uuid}`}
@@ -1775,16 +1802,17 @@ export function TiersPage() {
                       {a.position}
                     </span>
                   </button>
-                ))}
+              ))}
+              {availableAgents.length === 0 && <p className="py-4 text-center text-xs text-muted-foreground">No agents available to add.</p>}
             </div>
           </Card>
           <Card className="p-5">
-            <div className="eyebrow text-muted-foreground">Change review</div>
+            <div className="eyebrow text-muted-foreground">Membership changes</div>
             <div className="mt-2 text-sm font-extrabold">
-              {selected.length} agents selected
+              Changes apply immediately
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Changes apply to{" "}
+              Adds and removals apply to{" "}
               {queues?.find((q) => q.extension === queue)?.name ||
                 "selected campaign"}{" "}
               only.
@@ -1797,26 +1825,6 @@ export function TiersPage() {
                 {notice}
               </div>
             )}
-            <button
-              disabled={update.isPending}
-              onClick={() =>
-                update.mutate(
-                  { campaign_id: queue, agent_uuids: selected },
-                  { onSuccess: () => setNotice("Routing membership saved") },
-                )
-              }
-              className="mt-5 w-full rounded-xl bg-primary py-3 text-xs font-extrabold text-primary-foreground disabled:opacity-50"
-              data-testid="button-save-tier-changes"
-            >
-              {update.isPending ? (
-                <Spinner label="Saving" />
-              ) : (
-                <>
-                  <Save size={14} className="mr-2 inline" />
-                  Save routing changes
-                </>
-              )}
-            </button>
           </Card>
         </div>
       </div>

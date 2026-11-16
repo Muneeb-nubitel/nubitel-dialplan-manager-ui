@@ -45,4 +45,12 @@ export const tiersApi = {
       .sort((a, b) => a.level - b.level);
   },
   updateMembership: async (body: unknown) => { if (isMockEnabled()) { await wait(520); return body; } return request('/call-center/api/v1/tiers/update-agent-tier', { method: 'POST', body: JSON.stringify(body) }); },
+  add: async ({ domain, extension, level, agents }: { domain: string; extension: string; level: number; agents: Record<string, number> }) => {
+    if (isMockEnabled()) { await wait(520); return; }
+    return request(`/call-center/api/v1/tiers/add?domain_name=${encodeURIComponent(domain)}&extension=${encodeURIComponent(extension)}&level=${level}`, { method: 'PATCH', body: JSON.stringify(agents) });
+  },
+  remove: async ({ domain, extension, level, agents }: { domain: string; extension: string; level: number; agents: Record<string, number> }) => {
+    if (isMockEnabled()) { await wait(520); return; }
+    return request(`/call-center/api/v1/tiers/remove?domain_name=${encodeURIComponent(domain)}&extension=${encodeURIComponent(extension)}&level=${level}`, { method: 'PATCH', body: JSON.stringify(agents) });
+  },
 };

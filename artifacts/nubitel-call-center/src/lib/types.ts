@@ -33,3 +33,8 @@ export type CdrSummary = {
 };
 export type QueueActivityPoint = { bucket: string; queued: number; routed: number; abandoned: number };
 export type QueueActivity = { rangeHours: number; bucketMinutes: number; points: QueueActivityPoint[] };
+export type OperationsSummary = {
+  callsInFlight: number; campaignCount: number;
+  states: { waiting: number; trying: number; receiving: number; active: number };
+  floor: { state: "stable" | "attention" | "critical"; message: string; queues?: string[] };
+};
