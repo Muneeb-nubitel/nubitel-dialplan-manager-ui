@@ -5,6 +5,7 @@ import { statsApi } from '@/lib/api/statsApi';
 import { tiersApi } from '@/lib/api/tiersApi';
 import { syncApi } from '@/lib/api/syncApi';
 import { cdrApi, type CdrFilterParams } from '@/lib/api/cdrApi';
+import { domainsApi } from '@/lib/api/domainsApi';
 import { selectionApi } from '@/lib/api/selectionApi';
 function getRefreshIntervalMs() {
   const seconds = Number(localStorage.getItem('nubitel-refresh') ?? '30');
@@ -23,3 +24,5 @@ export const useUpdateTier = (domain: string) => { const qc = useQueryClient(); 
 export const useSync = () => useMutation({ mutationFn: syncApi.run });
 export const useCdr = (params: CdrFilterParams & { page: number }) => useQuery({ queryKey: ['cdr', params], queryFn: () => cdrApi.list(params), retry: false });
 export const useCdrSummary = (params: CdrFilterParams) => useQuery({ queryKey: ['cdr-summary', params], queryFn: () => cdrApi.summary(params), retry: false });
+export const useQueueActivity = (domain: string, hours: 1 | 24) => useQuery({ queryKey: ['queue-activity', domain, hours], queryFn: () => cdrApi.activity(domain, hours), retry: false, refetchInterval: getRefreshIntervalMs() });
+export const useDomains = () => useQuery({ queryKey: ['domains'], queryFn: domainsApi.list, retry: false, staleTime: 5 * 60 * 1000 });

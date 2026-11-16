@@ -17,7 +17,7 @@ export function getQueueMemberStats(domain: string, campaignIds: string[]) {
     }
 
     const body = JSON.stringify({ campaign_ids: campaignIds });
-    const url = new URL("https://cxdev-dialplan-api.nubitel.io/call-center/api/v1/queues/queue-members-stats");
+    const url = new URL("https://cxdev-dialplan-stats-api.nubitel.io/call-center-stats/api/v1/queues/queue-members-stats");
     url.searchParams.set("domain_name", domain);
     const request = https.request(url, {
       method: "GET",

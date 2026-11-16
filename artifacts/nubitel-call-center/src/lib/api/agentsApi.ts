@@ -1,4 +1,4 @@
-import { isMockEnabled, request, wait } from '../api-client';
+import { isMockEnabled, request, statsRequest, wait } from '../api-client';
 import { mockAgents } from '../mock-data';
 import type { Agent } from '../types';
 
@@ -46,7 +46,7 @@ export const agentsApi = {
       await wait();
       return mockAgents.filter((agent) => agent.domain_name === domain);
     }
-    const response = await request<AgentDashboardResponse>(`/call-center/api/v1/agents?domain_name=${encodeURIComponent(domain)}`);
+    const response = await statsRequest<AgentDashboardResponse>(`/call-center-stats/api/v1/agents?domain_name=${encodeURIComponent(domain)}`);
     return response.agents.map(normalizeAgent);
   },
   save: async (agent: Partial<Agent>) => { if (isMockEnabled()) { await wait(550); return agent; } return request<Agent>('/call-center/api/v1/agent', { method: 'POST', body: JSON.stringify(agent) }); },

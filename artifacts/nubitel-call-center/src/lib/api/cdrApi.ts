@@ -1,5 +1,5 @@
 import { campaignsRequest, isMockEnabled, request, wait } from '../api-client';
-import type { CdrListResponse, CdrSummary } from '../types';
+import type { CdrListResponse, CdrSummary, QueueActivity } from '../types';
 
 export type CdrFilterParams = { domain: string; search: string; status: string; dateFrom: string; dateTo: string };
 
@@ -31,6 +31,10 @@ export const cdrApi = {
     }
     const query = buildFilterQuery(params);
     return campaignsRequest<CdrSummary>(`/api/cdr/summary?${query}`);
+  },
+  activity: async (domain: string, hours: 1 | 24) => {
+    const query = new URLSearchParams({ domain_name: domain, hours: String(hours) });
+    return campaignsRequest<QueueActivity>(`/api/cdr/activity?${query}`);
   },
   add: async (record: unknown) => { if (isMockEnabled()) { await wait(400); return record; } return request('/api/v1/cdr/add/call-record', { method: 'POST', body: JSON.stringify(record) }); },
 };

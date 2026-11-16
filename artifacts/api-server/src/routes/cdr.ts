@@ -131,4 +131,53 @@ router.get("/cdr/summary", async (req, res) => {
   }
 });
 
+router.get("/cdr/activity", async (req, res) => {
+  const domain = String(req.query["domain_name"] ?? "").trim();
+  if (!domain || !domainPattern.test(domain)) {
+    res.status(400).json({ message: "A valid domain_name is required" });
+    return;
+  }
+  const rangeHours = Number(req.query["hours"] ?? 1) === 24 ? 24 : 1;
+  const bucketSeconds = rangeHours === 24 ? 3_600 : 300;
+  const bucketCount = rangeHours === 24 ? 24 : 12;
+
+  try {
+    const db = getCdrPool();
+    const result = await db.query(
+      `WITH bounds AS (
+         SELECT to_timestamp(floor(extract(epoch FROM now()) / $2) * $2) AS end_at
+       ), buckets AS (
+         SELECT generate_series(
+           end_at - (($3 - 1) * $2 * interval '1 second'),
+           end_at,
+           $2 * interval '1 second'
+         ) AS bucket
+         FROM bounds
+       ), activity AS (
+         SELECT to_timestamp(floor(extract(epoch FROM entered_queue_at) / $2) * $2) AS bucket,
+           1::int AS queued, 0::int AS routed, 0::int AS abandoned
+         FROM public.mod_call_center_cdr, bounds
+         WHERE queue_domain = $1 AND entered_queue_at >= bounds.end_at - ($3 * $2 * interval '1 second')
+         UNION ALL
+         SELECT to_timestamp(floor(extract(epoch FROM completed_at) / $2) * $2) AS bucket,
+           0::int, (connected_agent_uuid IS NOT NULL)::int::int,
+           (final_status ILIKE '%ABANDON%')::int::int
+         FROM public.mod_call_center_cdr, bounds
+         WHERE queue_domain = $1 AND completed_at >= bounds.end_at - ($3 * $2 * interval '1 second')
+       )
+       SELECT buckets.bucket,
+         COALESCE(SUM(activity.queued), 0)::int AS queued,
+         COALESCE(SUM(activity.routed), 0)::int AS routed,
+         COALESCE(SUM(activity.abandoned), 0)::int AS abandoned
+       FROM buckets LEFT JOIN activity ON activity.bucket = buckets.bucket
+       GROUP BY buckets.bucket ORDER BY buckets.bucket`,
+      [domain, bucketSeconds, bucketCount],
+    );
+    res.json({ rangeHours, bucketMinutes: bucketSeconds / 60, points: result.rows });
+  } catch (error) {
+    req.log.error({ err: error }, "Unable to load CDR queue activity");
+    res.status(503).json({ message: "Queue activity storage is unavailable" });
+  }
+});
+
 export default router;

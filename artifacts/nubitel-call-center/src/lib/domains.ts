@@ -1,4 +1,7 @@
-export const availableDomains = [
+export type Domain = { value: string; label: string; uuid: string };
+
+// Used only until the real list is loaded, or when the local API is unavailable.
+export const fallbackDomains: Domain[] = [
   {
     value: 'cxdev.nubitel.io',
     label: 'cxdev.nubitel.io',
@@ -16,11 +19,9 @@ export const availableDomains = [
   },
 ] as const;
 
-export const defaultDomain = availableDomains[0].value;
+export const defaultDomain = fallbackDomains[0].value;
 
 export function getSelectedDomain() {
   const storedDomain = localStorage.getItem('nubitel-domain');
-  return availableDomains.some(({ value }) => value === storedDomain)
-    ? storedDomain!
-    : defaultDomain;
+  return storedDomain || defaultDomain;
 }

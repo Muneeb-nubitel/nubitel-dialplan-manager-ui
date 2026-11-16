@@ -12,6 +12,12 @@ function numberValue(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function optionalNumberValue(value: unknown) {
+  if (value === undefined || value === null || value === "") return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 router.get("/campaigns", async (req, res) => {
   const domain = String(req.query["domain_name"] ?? "").trim();
   if (!domain || !domainPattern.test(domain)) {
@@ -46,6 +52,13 @@ router.get("/campaigns", async (req, res) => {
         inQueue: numberValue(queue["inQueue"] ?? queue["in_queue"]),
         tierCount: numberValue(queue["tierCount"] ?? queue["tier_count"]),
         status: String(queue["status"] ?? "configured"),
+        campaign_priority: optionalNumberValue(queue["campaign_priority"]),
+        call_weight: optionalNumberValue(queue["call_weight"]),
+        aging_seconds: optionalNumberValue(queue["aging_seconds"]),
+        aging_points: optionalNumberValue(queue["aging_points"]),
+        boost_time: optionalNumberValue(queue["boost_time"]),
+        boost_score: optionalNumberValue(queue["boost_score"]),
+        queueLimit: optionalNumberValue(queue["queueLimit"] ?? queue["queue_limit"]),
       };
     });
 

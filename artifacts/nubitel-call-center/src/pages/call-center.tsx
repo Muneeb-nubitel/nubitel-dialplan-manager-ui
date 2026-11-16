@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation, useParams } from "wouter";
 import {
   ArrowDownRight,
@@ -44,10 +45,12 @@ import {
   useAgents,
   useCdr,
   useCdrSummary,
+  useDomains,
   useDeleteAgent,
   useDeleteQueue,
   useOverview,
   useQueues,
+  useQueueActivity,
   useSelectionScores,
   useSaveAgent,
   useSaveQueue,
@@ -55,7 +58,7 @@ import {
   useTiers,
   useUpdateTier,
 } from "@/hooks/use-call-center";
-import { mockAgents, callVolumes } from "@/lib/mock-data";
+import { mockAgents } from "@/lib/mock-data";
 import type { Agent, Queue } from "@/lib/types";
 import {
   EmptyState,
@@ -64,7 +67,8 @@ import {
   Spinner,
   StatusPill,
 } from "@/components/ui-primitives";
-import { availableDomains, getSelectedDomain } from "@/lib/domains";
+import { fallbackDomains, getSelectedDomain } from "@/lib/domains";
+import { queuesApi } from "@/lib/api/queuesApi";
 
 const domain = getSelectedDomain;
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n);
@@ -126,7 +130,7 @@ function Metric({
 }: {
   label: string;
   value: string;
-  trend: string;
+  trend?: string;
   icon: React.ElementType;
   accent?: string;
 }) {
@@ -144,16 +148,12 @@ function Metric({
         <strong className="mono text-2xl font-medium tracking-[-.06em]">
           {value}
         </strong>
-        <span
+        {trend && <span
           className={`flex items-center gap-1 text-[11px] font-bold ${trend.startsWith("-") ? "text-destructive" : "text-[hsl(155,50%,28%)]"}`}
         >
-          {trend.startsWith("-") ? (
-            <ArrowDownRight size={13} />
-          ) : trend.startsWith("+") ? (
-            <ArrowUpRight size={13} />
-          ) : null}
+          {trend.startsWith("-") ? <ArrowDownRight size={13} /> : trend.startsWith("+") ? <ArrowUpRight size={13} /> : null}
           {trend}
-        </span>
+        </span>}
       </div>
     </Card>
   );
@@ -230,8 +230,11 @@ function Topbar({
 
 export function OverviewPage() {
   const { data, isLoading, isError, refetch } = useOverview(domain());
+  const [activityRange, setActivityRange] = useState<1 | 24>(1);
+  const { data: activity } = useQueueActivity(domain(), activityRange);
   const agents = data?.agents || [];
   const queues = data?.queues || [];
+  const activityPoints = activity?.points || [];
   const statusData = [
     {
       name: "Available",
@@ -302,7 +305,6 @@ export function OverviewPage() {
           <Metric
             label="Agents online"
             value={`${agents.filter((a) => a.status === "active").length} / ${agents.length}`}
-            trend="+2.4%"
             icon={UsersRound}
           />
           <CallsInFlightMetric queues={queues} />
@@ -319,24 +321,19 @@ export function OverviewPage() {
                 Calls moving through the floor
               </h2>
             </div>
-            <span className="mono rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
-              last 60 min
-            </span>
+            <select value={activityRange} onChange={(event) => setActivityRange(Number(event.target.value) as 1 | 24)} className="mono rounded-md border-0 bg-muted px-2 py-1 text-[10px] text-muted-foreground" data-testid="select-queue-activity-range">
+              <option value={1}>last 60 min</option>
+              <option value={24}>last 24 hours</option>
+            </select>
           </div>
           <div className="mt-5 h-[235px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
-                data={callVolumes.map((value, i) => ({
-                  time: `${i * 5}m`,
-                  value,
+                data={activityPoints.map((point) => ({
+                  ...point,
+                  time: new Date(point.bucket).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
                 }))}
               >
-                <defs>
-                  <linearGradient id="signalFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#f2775e" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#f2775e" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
                 <CartesianGrid vertical={false} stroke="#e5e8ed" />
                 <XAxis
                   dataKey="time"
@@ -356,21 +353,18 @@ export function OverviewPage() {
                 />
                 <Area
                   type="monotone"
-                  dataKey="value"
-                  stroke="#f2775e"
+                  dataKey="routed"
+                  stroke="#b9df51"
                   strokeWidth={3}
-                  fill="url(#signalFill)"
+                  fill="none"
                 />
+                <Area type="monotone" dataKey="abandoned" stroke="#f1b14b" strokeWidth={3} fill="none" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
           <div className="mt-3 flex items-center gap-5 text-[11px] text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <i className="h-2 w-2 rounded-full bg-primary" />
-              Inbound calls
-            </span>
-            <span className="mono text-foreground">92 peak</span>
-            <span className="mono text-foreground">63 avg.</span>
+            <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[hsl(77,61%,60%)]" />Routed to agent</span>
+            <span className="flex items-center gap-2"><i className="h-2 w-2 rounded-full bg-[hsl(37,86%,62%)]" />Abandoned</span>
           </div>
         </Card>
         <Card className="p-5 sm:p-6">
@@ -725,6 +719,28 @@ function QueueForm({
   const [extension, setExtension] = useState(initial?.extension || "");
   const [strategy, setStrategy] = useState(initial?.strategy || "round-robin");
   const [record, setRecord] = useState(initial?.record ?? true);
+  const [campaignPriority, setCampaignPriority] = useState(initial?.campaign_priority?.toString() ?? "");
+  const [callWeight, setCallWeight] = useState(initial?.call_weight?.toString() ?? "");
+  const [agingSeconds, setAgingSeconds] = useState(initial?.aging_seconds?.toString() ?? "");
+  const [agingPoints, setAgingPoints] = useState(initial?.aging_points?.toString() ?? "");
+  const [boostTime, setBoostTime] = useState(initial?.boost_time?.toString() ?? "");
+  const [boostScore, setBoostScore] = useState(initial?.boost_score?.toString() ?? "");
+  const [queueLimit, setQueueLimit] = useState(initial?.queueLimit?.toString() ?? "");
+  const queueSettings = [
+    ["Campaign priority", campaignPriority, setCampaignPriority, "campaign_priority"],
+    ["Call weight", callWeight, setCallWeight, "call_weight"],
+    ["Aging seconds", agingSeconds, setAgingSeconds, "aging_seconds"],
+    ["Aging points", agingPoints, setAgingPoints, "aging_points"],
+    ["Boost time", boostTime, setBoostTime, "boost_time"],
+    ["Boost score", boostScore, setBoostScore, "boost_score"],
+    ["Queue limit", queueLimit, setQueueLimit, "queueLimit"],
+  ] as const;
+  const presentSettings = Object.fromEntries(
+    queueSettings.flatMap(([, value,, key]) => {
+      const numeric = Number(value);
+      return value.trim() !== "" && Number.isFinite(numeric) ? [[key, numeric]] : [];
+    }),
+  );
   return (
     <Card className="p-5 sm:p-6">
       <div className="mb-5 flex items-center justify-between">
@@ -788,6 +804,25 @@ function QueueForm({
           Record calls in this queue
         </label>
       </div>
+      <div className="mt-6 border-t border-border pt-5">
+        <div className="eyebrow text-muted-foreground">Queue controls</div>
+        <p className="mt-1 text-xs text-muted-foreground">Values not supplied by the queue are shown as N/A and are not sent when you save.</p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {queueSettings.map(([label, value, setValue, key]) => (
+            <label className="text-xs font-bold" key={key}>
+              {label}
+              <input
+                type="number"
+                value={value}
+                onChange={(event) => setValue(event.target.value)}
+                placeholder="N/A"
+                className="mono mt-2 h-10 w-full rounded-xl border border-input bg-card px-3 text-sm placeholder:text-muted-foreground"
+                data-testid={`input-campaign-${key}`}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
       <div className="mt-6 flex justify-end gap-2">
         <button
           onClick={onDone}
@@ -806,6 +841,7 @@ function QueueForm({
                 extension,
                 strategy,
                 record,
+                ...presentSettings,
                 domain_name: domain(),
               },
               { onSuccess: onDone },
@@ -1013,6 +1049,15 @@ export function CampaignDetailPage() {
   const { extension } = useParams<{ extension: string }>();
   const { data } = useQueues(domain());
   const queue = data?.find((q) => q.extension === extension);
+  const { data: queueDetail, isLoading: isLoadingDetail } = useQuery({
+    queryKey: ["queue-detail", domain(), extension],
+    queryFn: () => queuesApi.get(extension!, domain()),
+    enabled: Boolean(queue && extension),
+    retry: false,
+  });
+  const detailedQueue = queueDetail && queue
+    ? { ...queue, ...queueDetail, extension: queue.extension, domain_name: queue.domain_name }
+    : queue;
   return (
     <PageFrame
       eyebrow="Campaign / queue detail"
@@ -1028,8 +1073,10 @@ export function CampaignDetailPage() {
         </Link>
       }
     >
-      {queue ? (
-        <QueueForm initial={queue} onDone={() => window.history.back()} />
+      {queue && isLoadingDetail ? (
+        <Card className="space-y-3 p-5"><Skeleton className="h-12" /><Skeleton className="h-12" /><Skeleton className="h-12" /></Card>
+      ) : detailedQueue ? (
+        <QueueForm initial={detailedQueue} onDone={() => window.history.back()} />
       ) : (
         <EmptyState
           title="Campaign not found"
@@ -2307,6 +2354,12 @@ export function SettingsPage() {
       import.meta.env.VITE_API_BASE_URL ||
       "https://cxdev-dialplan-api.nubitel.io",
   );
+  const [statsBase, setStatsBase] = useState(
+    () =>
+      localStorage.getItem("nubitel-stats-api-base") ||
+      import.meta.env.VITE_STATS_API_BASE_URL ||
+      "https://cxdev-dialplan-stats-api.nubitel.io",
+  );
   const [selectedDomain, setSelectedDomain] = useState(getSelectedDomain);
   const [interval, setIntervalValue] = useState(
     () => localStorage.getItem("nubitel-refresh") || "30",
@@ -2318,9 +2371,15 @@ export function SettingsPage() {
     () => localStorage.getItem("nubitel-theme") || "light",
   );
   const [saved, setSaved] = useState(false);
+  const { data: loadedDomains } = useDomains();
+  const domains = loadedDomains?.length ? loadedDomains : fallbackDomains;
+  useEffect(() => {
+    if (loadedDomains?.length && !loadedDomains.some(({ value }) => value === selectedDomain)) setSelectedDomain(loadedDomains[0].value);
+  }, [loadedDomains, selectedDomain]);
   const [, setLocation] = useLocation();
   const save = () => {
     localStorage.setItem("nubitel-api-base", base);
+    localStorage.setItem("nubitel-stats-api-base", statsBase);
     localStorage.setItem("nubitel-domain", selectedDomain);
     localStorage.setItem("nubitel-refresh", interval);
     localStorage.setItem("nubitel-mock", String(mock));
@@ -2352,13 +2411,23 @@ export function SettingsPage() {
             <h2 className="mt-1 text-base font-extrabold">API and workspace</h2>
             <div className="mt-5 space-y-4">
               <label className="block text-xs font-bold">
-                API base URL
+                Dialplan API base URL
                 <input
                   value={base}
                   onChange={(e) => setBase(e.target.value)}
                   className="mono mt-2 h-10 w-full rounded-xl border border-input bg-card px-3 text-xs"
                   data-testid="input-api-base-url"
                 />
+              </label>
+              <label className="block text-xs font-bold">
+                Stats API base URL
+                <input
+                  value={statsBase}
+                  onChange={(e) => setStatsBase(e.target.value)}
+                  className="mono mt-2 h-10 w-full rounded-xl border border-input bg-card px-3 text-xs"
+                  data-testid="input-stats-api-base-url"
+                />
+                <span className="mt-1 block text-[11px] font-normal text-muted-foreground">Used for live agents and queue statistics.</span>
               </label>
               <label className="block text-xs font-bold">
                 Default domain
@@ -2368,7 +2437,7 @@ export function SettingsPage() {
                   className="mono mt-2 h-10 w-full rounded-xl border border-input bg-card px-3 text-xs"
                   data-testid="select-default-domain"
                 >
-                  {availableDomains.map(({ value, label }) => (
+                  {domains.map(({ value, label }) => (
                     <option key={value} value={value}>
                       {label}
                     </option>
@@ -2447,24 +2516,24 @@ export function SettingsPage() {
             <div className="eyebrow text-muted-foreground">Diagnostics</div>
             <h2 className="mt-1 text-base font-extrabold">Health check</h2>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              Test the configured API without changing any records.
+              Test the read-only Stats API without changing any records.
             </p>
             <button
-              onClick={() => window.alert(`Health check queued for ${base}`)}
+              onClick={() => window.alert(`Health check queued for ${statsBase}`)}
               className="mt-4 w-full rounded-xl border border-border bg-card py-2.5 text-xs font-extrabold hover:border-primary hover:text-primary"
               data-testid="button-test-health"
             >
               <Wifi size={14} className="mr-2 inline" />
-              Test API connection
+              Test Stats API connection
             </button>
             <a
-              href={`${base}/swagger/index.html`}
+              href={`${statsBase}/swagger/`}
               target="_blank"
               rel="noreferrer"
               className="mt-3 flex items-center justify-center gap-2 text-xs font-extrabold text-primary hover:underline"
               data-testid="link-swagger"
             >
-              Open Swagger documentation <ExternalLink size={13} />
+              Open Stats API documentation <ExternalLink size={13} />
             </a>
             <button
               onClick={() => {

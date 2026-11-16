@@ -3,6 +3,13 @@ import { mockQueues } from '../mock-data';
 import type { Queue } from '../types';
 export const queuesApi = {
   list: async (domain: string) => { if (isMockEnabled()) { await wait(); return mockQueues.filter((q) => q.domain_name === domain); } return campaignsRequest<Queue[]>(`/api/campaigns?domain_name=${encodeURIComponent(domain)}`); },
+  get: async (extension: string, domain: string) => {
+    if (isMockEnabled()) {
+      await wait();
+      return mockQueues.find((queue) => queue.extension === extension && queue.domain_name === domain);
+    }
+    return request<Partial<Queue>>(`/call-center/api/v1/queues?extension=${encodeURIComponent(extension)}&domain_name=${encodeURIComponent(domain)}`);
+  },
   save: async (queue: Partial<Queue>) => { if (isMockEnabled()) { await wait(550); return queue; } return request<Queue>('/call-center/api/v1/queues', { method: 'POST', body: JSON.stringify(queue) }); },
   remove: async (extension: string, domain: string) => { if (isMockEnabled()) { await wait(450); return { extension }; } return request(`/call-center/api/v1/queues?extension=${extension}&domain_name=${domain}`, { method: 'DELETE' }); },
 };

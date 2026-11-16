@@ -7,6 +7,8 @@ export type Queue = {
   extension: string; name: string; uuid: string; campaignId?: string; domain_name: string; strategy: string;
   record: boolean; waiting: number; trying: number; receiving: number; answered: number; inQueue: number;
   tierCount: number; status: string;
+  campaign_priority?: number; call_weight?: number; aging_seconds?: number; aging_points?: number;
+  boost_time?: number; boost_score?: number; queueLimit?: number;
 };
 export type TierAgent = { uuid: string; position: number; status: string; call_status: string; last_active: string };
 export type Tier = { id: string; level: number; name: string; state: string; agents: string[]; agentDetails?: Record<string, TierAgent> };
@@ -29,3 +31,5 @@ export type CdrSummary = {
   byStatus: { status: string; count: number }[];
   byReason: { reason: string; count: number }[];
 };
+export type QueueActivityPoint = { bucket: string; queued: number; routed: number; abandoned: number };
+export type QueueActivity = { rangeHours: number; bucketMinutes: number; points: QueueActivityPoint[] };
